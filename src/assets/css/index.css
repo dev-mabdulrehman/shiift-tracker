@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+button, a{
+    cursor: pointer;
+}
+
+button:disabled, a:disabled{
+    cursor: not-allowed;
+    opacity: 50%;
+}
