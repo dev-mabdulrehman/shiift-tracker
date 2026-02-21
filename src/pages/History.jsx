@@ -71,6 +71,25 @@ export default function History() {
         return () => unsubscribe();
     }, [user, selectedMonth]);
 
+    // Add to your existing states
+    const [selectedShiftIds, setSelectedShiftIds] = useState([]);
+
+    // Toggle selection for a single shift
+    const toggleSelectShift = (id) => {
+        setSelectedShiftIds(prev =>
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+        );
+    };
+
+    // Toggle all currently filtered shifts
+    const toggleSelectAll = () => {
+        if (selectedShiftIds.length === filteredShifts.length) {
+            setSelectedShiftIds([]);
+        } else {
+            setSelectedShiftIds(filteredShifts.map(s => s.id));
+        }
+    };
+
     // 3. FILTERING & STATS CALCULATIONS
     const { filteredShifts, stats } = useMemo(() => {
         const filtered = shifts.filter(s => {
@@ -96,6 +115,28 @@ export default function History() {
     const handleEditClick = (shift) => {
         setEditingShift({ ...shift });
         setIsEditModalOpen(true);
+    };
+
+    const handleBulkDelete = async () => {
+        if (!window.confirm(`Are you sure you want to delete ${selectedShiftIds.length} shifts?`)) return;
+
+        setActionLoading(true);
+        try {
+            const batch = writeBatch(db);
+            selectedShiftIds.forEach((id) => {
+                const docRef = doc(db, "shifts", id);
+                batch.delete(docRef);
+            });
+
+            await batch.commit();
+            setSelectedShiftIds([]); // Clear selection after success
+            alert("Selected shifts deleted successfully.");
+        } catch (err) {
+            console.error("Bulk Delete Error:", err);
+            alert("Failed to delete selected shifts.");
+        } finally {
+            setActionLoading(false);
+        }
     };
 
     const handleUpdateShift = async (e) => {
@@ -290,11 +331,47 @@ export default function History() {
                 setStatusFilter={setStatusFilter}
             />
 
+            {/* Bulk Action Bar */}
+            {selectedShiftIds.length > 0 && (
+                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-3xl flex items-center justify-between animate-in fade-in slide-in-from-top-4">
+                    <div className="flex items-center gap-3">
+                        <span className="bg-indigo-600 text-white w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold shadow-sm">
+                            {selectedShiftIds.length}
+                        </span>
+                        <p className="text-indigo-900 font-bold">Shifts Selected</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setSelectedShiftIds([])}
+                            className="px-4 py-2 text-sm font-bold text-indigo-600 hover:bg-indigo-100 rounded-xl transition"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleBulkDelete}
+                            disabled={actionLoading}
+                            className="flex items-center gap-2 px-5 py-2 bg-red-500 text-white rounded-xl text-sm font-bold hover:bg-red-600 transition shadow-md disabled:opacity-50"
+                        >
+                            {actionLoading ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                            Delete Selected
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Desktop Table */}
             <div className="bg-white rounded-4xl border border-gray-100 shadow-sm overflow-hidden">
                 <table className="hidden md:table w-full text-left">
                     <thead className="bg-gray-50/50 border-b border-gray-100">
                         <tr>
+                            <th className="p-5 w-10">
+                                <input
+                                    type="checkbox"
+                                    className="w-5 h-5 rounded accent-indigo-600"
+                                    checked={filteredShifts.length > 0 && selectedShiftIds.length === filteredShifts.length}
+                                    onChange={toggleSelectAll}
+                                />
+                            </th>
                             <th className="p-5 text-xs font-bold text-gray-400 uppercase">Date & Hours</th>
                             <th className="p-5 text-xs font-bold text-gray-400 uppercase">Employer & Site</th>
                             <th className="p-5 text-xs font-bold text-gray-400 uppercase text-center">Earnings</th>
@@ -305,6 +382,14 @@ export default function History() {
                     <tbody className="divide-y divide-gray-50">
                         {filteredShifts.map(shift => (
                             <tr key={shift.id} className="hover:bg-indigo-50/20 transition">
+                                <td className="p-5">
+                                    <input
+                                        type="checkbox"
+                                        className="w-5 h-5 rounded accent-indigo-600"
+                                        checked={selectedShiftIds.includes(shift.id)}
+                                        onChange={() => toggleSelectShift(shift.id)}
+                                    />
+                                </td>
                                 <td className="p-5">
                                     <p className="font-bold text-gray-800">{shift.date}</p>
                                     <p className="text-xs text-indigo-500 font-medium">{shift.startTime} - {shift.endTime} ({shift.hours}h)</p>

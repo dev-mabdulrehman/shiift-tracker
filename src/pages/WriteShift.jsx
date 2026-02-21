@@ -9,13 +9,13 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { calculateEndTime } from '../utils/timeCalc';
 import {
     MapPin, Building2, PoundSterling,
-    Calendar, Clock, Loader2, ArrowLeft
+    Calendar, Clock, Loader2, ArrowLeft, CheckCircle2
 } from 'lucide-react';
 
 export default function WriteShift() {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const { id } = useParams(); // Detects ID from /shift/edit/:id
+    const { id } = useParams();
     const isEditMode = !!id;
 
     const [isSaving, setIsSaving] = useState(false);
@@ -29,13 +29,11 @@ export default function WriteShift() {
         employer: '',
         hourlyRate: '',
         startTime: '',
-        hours: ''
+        hours: '',
+        status: 'pending' // Default for new shifts
     });
 
-    // Calculated End Time State
     const [endTimeDisplay, setEndTimeDisplay] = useState('--:--');
-
-    // Suggestions & Database Data
     const [dbEmployers, setDbEmployers] = useState([]);
     const [dbSites, setDbSites] = useState([]);
     const [showEmployerSuggestions, setShowEmployerSuggestions] = useState(false);
@@ -44,30 +42,12 @@ export default function WriteShift() {
     const empRef = useRef();
     const siteRef = useRef();
 
-    useEffect(() => {
-        if (!id) {
-            // Reset to initial state
-            setFormData({
-                date: new Date().toISOString().split('T')[0],
-                siteName: '',
-                postalCode: '',
-                employer: '',
-                hourlyRate: '',
-                startTime: '',
-                hours: ''
-            });
-            setEndTimeDisplay('--:--');
-            setIsLoading(false); // Make sure it's not stuck in loading
-        }
-    }, [id]); // Triggers whenever the ID in the URL changes
-
-    // 1. Initial Fetch: Metadata & Existing Shift (if editing)
+    // 1. Initial Fetch: Metadata & Existing Shift
     useEffect(() => {
         const fetchData = async () => {
             if (!user) return;
 
             try {
-                // Fetch Employers and Sites for suggestions
                 const empQ = query(collection(db, "employers"), where("userId", "==", user.uid));
                 const siteQ = query(collection(db, "sites"), where("userId", "==", user.uid));
                 const [empSnap, siteSnap] = await Promise.all([getDocs(empQ), getDocs(siteQ)]);
@@ -78,21 +58,15 @@ export default function WriteShift() {
                 setDbEmployers(emps);
                 setDbSites(sites);
 
-                // If Editing, fetch the shift document
                 if (isEditMode) {
                     const shiftDoc = await getDoc(doc(db, "shifts", id));
                     if (shiftDoc.exists() && shiftDoc.data().userId === user.uid) {
                         const data = shiftDoc.data();
-
-                        // Map IDs back to names for the form
                         const matchedEmp = emps.find(e => e.id === data.employerId);
                         const matchedSite = sites.find(s => s.id === data.siteId);
 
-                        // Ensure startTime is in HH:mm format
                         let formattedTime = data.startTime || '';
-
-                        // If the time is "9:00", pad it to "09:00"
-                        if (formattedTime && formattedTime.length === 4 && formattedTime.includes(':')) {
+                        if (formattedTime && formattedTime.length === 4) {
                             formattedTime = '0' + formattedTime;
                         }
 
@@ -103,15 +77,15 @@ export default function WriteShift() {
                             hourlyRate: data.hourlyRate.toString(),
                             employer: matchedEmp ? matchedEmp.name : '',
                             siteName: matchedSite ? matchedSite.siteName : '',
-                            postalCode: matchedSite ? matchedSite.postalCode : ''
+                            postalCode: matchedSite ? matchedSite.postalCode : '',
+                            status: data.status || 'pending'
                         });
                     } else {
-                        alert("Shift not found or access denied.");
                         navigate('/history');
                     }
                 }
             } catch (error) {
-                console.error("Initialization error:", error);
+                console.error("Error:", error);
             } finally {
                 setIsLoading(false);
             }
@@ -132,26 +106,16 @@ export default function WriteShift() {
         if (formData.date && formData.startTime && formData.hours) {
             const calculated = calculateEndTime(formData.date, formData.startTime, formData.hours);
             setEndTimeDisplay(calculated || '--:--');
-        } else {
-            setEndTimeDisplay('--:--');
         }
     }, [formData.date, formData.startTime, formData.hours]);
 
     const handleSelectEmployer = (emp) => {
-        setFormData(prev => ({
-            ...prev,
-            employer: emp.name,
-            hourlyRate: emp.defaultRate || ''
-        }));
+        setFormData(prev => ({ ...prev, employer: emp.name, hourlyRate: emp.defaultRate || '' }));
         setShowEmployerSuggestions(false);
     };
 
     const handleSelectSite = (site) => {
-        setFormData(prev => ({
-            ...prev,
-            siteName: site.siteName,
-            postalCode: site.postalCode
-        }));
+        setFormData(prev => ({ ...prev, siteName: site.siteName, postalCode: site.postalCode }));
         setShowSiteSuggestions(false);
     };
 
@@ -161,18 +125,11 @@ export default function WriteShift() {
         setIsSaving(true);
 
         try {
-            // A. Handle Employer Logic
+            // Employer Logic
             let employerId;
             const existingEmp = dbEmployers.find(item => item.name.toLowerCase().trim() === formData.employer.toLowerCase().trim());
-
             if (existingEmp) {
                 employerId = existingEmp.id;
-                if (parseFloat(formData.hourlyRate) !== parseFloat(existingEmp.defaultRate)) {
-                    const confirmUpdate = window.confirm(`Update default rate for ${existingEmp.name}?`);
-                    if (confirmUpdate) {
-                        await updateDoc(doc(db, "employers", existingEmp.id), { defaultRate: formData.hourlyRate });
-                    }
-                }
             } else {
                 const newEmpRef = await addDoc(collection(db, "employers"), {
                     name: formData.employer.trim(),
@@ -183,9 +140,9 @@ export default function WriteShift() {
                 employerId = newEmpRef.id;
             }
 
-            // B. Handle Site Logic
-            const existingSite = dbSites.find(item => item.siteName.toLowerCase().trim() === formData.siteName.toLowerCase().trim());
+            // Site Logic
             let siteId;
+            const existingSite = dbSites.find(item => item.siteName.toLowerCase().trim() === formData.siteName.toLowerCase().trim());
             if (existingSite) {
                 siteId = existingSite.id;
             } else {
@@ -198,7 +155,6 @@ export default function WriteShift() {
                 siteId = newSiteRef.id;
             }
 
-            // C. Save or Update Shift Record
             const rate = parseFloat(formData.hourlyRate) || 0;
             const hrs = parseFloat(formData.hours) || 0;
 
@@ -212,7 +168,8 @@ export default function WriteShift() {
                 employerId,
                 siteId,
                 userId: user.uid,
-                updatedAt: serverTimestamp()
+                updatedAt: serverTimestamp(),
+                status: formData.status // Saves the selected status
             };
 
             if (isEditMode) {
@@ -220,14 +177,12 @@ export default function WriteShift() {
             } else {
                 await addDoc(collection(db, "shifts"), {
                     ...shiftPayload,
-                    status: "pending",
                     createdAt: serverTimestamp()
                 });
             }
 
             navigate('/history');
         } catch (error) {
-            console.error("Save error:", error);
             alert("Error saving shift.");
         } finally {
             setIsSaving(false);
@@ -244,7 +199,7 @@ export default function WriteShift() {
     }
 
     return (
-        <div className="mx-auto max-w-2xl">
+        <div className="mx-auto max-w-2xl pb-10">
             <form onSubmit={handleSubmit} className="bg-white p-8 rounded-3xl shadow-xl space-y-6 border border-gray-100">
                 <div className="flex justify-between items-center">
                     <h2 className="text-2xl font-bold text-gray-800">
@@ -254,6 +209,24 @@ export default function WriteShift() {
                         <ArrowLeft size={20} />
                     </Link>
                 </div>
+
+                {/* Status Dropdown - ONLY SHOWS ON EDIT */}
+                {isEditMode && (
+                    <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                        <label className="text-xs font-bold text-indigo-600 uppercase mb-2 flex items-center gap-2">
+                            <CheckCircle2 size={14} /> Update Status
+                        </label>
+                        <select
+                            value={formData.status}
+                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                            className="w-full p-3 bg-white border border-indigo-200 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                        >
+                            <option value="pending">⏳ Pending</option>
+                            <option value="on site">📍 On Site</option>
+                            <option value="completed">✅ Completed</option>
+                        </select>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Date */}
@@ -294,7 +267,7 @@ export default function WriteShift() {
                     </div>
                 </div>
 
-                {/* Site */}
+                {/* Site Name */}
                 <div className="relative" ref={siteRef}>
                     <label className="text-sm font-semibold text-gray-600 mb-1 flex items-center gap-1"><MapPin size={14} /> Site Name</label>
                     <input
