@@ -411,7 +411,7 @@ export default function History() {
                                 </td>
                                 <td className="p-5">
                                     <div className="flex justify-end gap-1">
-                                        <Link to={`/shift/edit/${shift.id}`} onClick={() => handleEditClick(shift)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition">
+                                        <Link to={`/shift/edit/${shift.id}`} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition">
                                             <Edit3 size={18} />
                                         </Link>
                                         <button onClick={() => handleDelete(shift.id)} className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition">
@@ -443,7 +443,7 @@ export default function History() {
                                     <p className="font-bold text-gray-900">£{parseFloat(shift.totalEarnings).toFixed(2)}</p>
                                 </div>
                                 <div className="flex gap-2">
-                                    <button onClick={() => handleEditClick(shift)} className="p-2 bg-white border border-gray-100 rounded-xl text-indigo-600 shadow-sm"><Edit3 size={18} /></button>
+                                    <button to={`/shift/edit/${shift.id}`} className="p-2 bg-white border border-gray-100 rounded-xl text-indigo-600 shadow-sm"><Edit3 size={18} /></button>
                                     <button onClick={() => handleDelete(shift.id)} className="p-2 bg-white border border-gray-100 rounded-xl text-red-500 shadow-sm"><Trash2 size={18} /></button>
                                 </div>
                             </div>

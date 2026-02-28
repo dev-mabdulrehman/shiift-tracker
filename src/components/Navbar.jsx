@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, PlusCircle, History, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, History, LogOut, Menu, X, User } from 'lucide-react';
 
 export default function Navbar() {
     const { user } = useAuth();
@@ -24,6 +24,7 @@ export default function Navbar() {
         { name: 'Dashboard', path: '/', icon: <LayoutDashboard size={20} /> },
         { name: 'Add Shift', path: '/shift/add', icon: <PlusCircle size={20} /> },
         { name: 'History', path: '/history', icon: <History size={20} /> },
+        { name: 'Profile', path: '/profile', icon: <User size={20} /> },
     ];
 
     const isActive = (path) => location.pathname === path;
@@ -35,7 +36,7 @@ export default function Navbar() {
                     {/* Logo */}
                     <div className="flex items-center">
                         <Link to="/" className="text-xl font-bold tracking-tight">
-                            Shift<span className="text-indigo-200">Track</span>
+                            Shift<span className="text-indigo-200">Tracker</span>
                         </Link>
                     </div>
 

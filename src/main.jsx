@@ -13,6 +13,7 @@ import History from './pages/History.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import ForgotPassword from './pages/ForgotPassword.jsx'
+import Profile from './pages/Profile.jsx';
 
 // Helper component to protect private routes
 const ProtectedRoute = ({ children }) => {
@@ -38,6 +39,7 @@ createRoot(document.getElementById('root')).render(
           <Route path='/shift/add' element={<WriteShift />} />
           <Route path='/shift/edit/:id' element={<WriteShift />} />
           <Route path='/history' element={<History />} />
+          <Route path='/profile' element={<Profile />} />
         </Route>
 
         {/* Catch-all: Redirect to Home */}
