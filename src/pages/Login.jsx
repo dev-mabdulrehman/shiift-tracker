@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useNavigate, Link } from 'react-router-dom';
@@ -7,15 +7,32 @@ export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (error) {
+            const timer = setTimeout(() => {
+                setError('');
+            }, 3000);
+
+            return () => clearTimeout(timer);
+        }
+    }, [error]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
+        setLoading(true);
         try {
-            await signInWithEmailAndPassword(auth, email, password);
-            navigate('/');
+            let authCreds = await signInWithEmailAndPassword(auth, email, password);
+            if (!authCreds.user.emailVerified)
+                setError("Verify your email to continue. Check inbox/spam.")
+            else
+                navigate('/');
         } catch (err) {
             setError("Invalid email or password.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -46,7 +63,7 @@ export default function Login() {
                     <div className="text-right">
                         <Link to="/forgot-password" size="sm" className="text-sm text-indigo-600 hover:underline">Forgot Password?</Link>
                     </div>
-                    <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition duration-200">
+                    <button disabled={loading} type="submit" className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition duration-200">
                         Sign In
                     </button>
                 </form>
