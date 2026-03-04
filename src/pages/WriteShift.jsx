@@ -1,16 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { db } from '../firebase';
 import {
-    collection, addDoc, query, where, getDocs,
-    updateDoc, doc, getDoc, serverTimestamp
+    doc, getDoc
 } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate, useParams, Link } from 'react-router-dom';
-import { calculateEndTime } from '../utils/timeCalc';
 import {
-    MapPin, Building2, PoundSterling,
-    Calendar, Clock, Loader2, ArrowLeft, CheckCircle2
+    ArrowLeft,
+    Building2,
+    Calendar,
+    CheckCircle2,
+    Loader2,
+    MapPin,
+    PoundSterling
 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { db } from '../firebase';
+import { saveShift } from '../store/features/shiftSlice';
+import { calculateEndTime } from '../utils/timeCalc';
 
 export default function WriteShift() {
     const { user } = useAuth();
@@ -21,6 +27,10 @@ export default function WriteShift() {
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(isEditMode);
 
+    const { data: shifts, status: shiftStatus, error: shiftError } = useSelector((state) => state.shifts);
+    const { data: sites, status: siteStatus, error: siteError } = useSelector((state) => state.sites);
+    const { data: employers, status: employersStatus, error: employersError } = useSelector((state) => state.employers);
+
     // Form State
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split('T')[0],
@@ -30,7 +40,7 @@ export default function WriteShift() {
         hourlyRate: '',
         startTime: '',
         hours: '',
-        status: 'pending' // Default for new shifts
+        status: 'pending'
     });
 
     const [endTimeDisplay, setEndTimeDisplay] = useState('--:--');
@@ -38,32 +48,23 @@ export default function WriteShift() {
     const [dbSites, setDbSites] = useState([]);
     const [showEmployerSuggestions, setShowEmployerSuggestions] = useState(false);
     const [showSiteSuggestions, setShowSiteSuggestions] = useState(false);
+    const dispatch = useDispatch();
 
     const empRef = useRef();
     const siteRef = useRef();
 
-    // 1. Initial Fetch: Metadata & Existing Shift
     useEffect(() => {
         const fetchData = async () => {
             if (!user) return;
 
             try {
-                const empQ = query(collection(db, "employers"), where("userId", "==", user.uid));
-                const siteQ = query(collection(db, "sites"), where("userId", "==", user.uid));
-                const [empSnap, siteSnap] = await Promise.all([getDocs(empQ), getDocs(siteQ)]);
-
-                const emps = empSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-                const sites = siteSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-                setDbEmployers(emps);
-                setDbSites(sites);
 
                 if (isEditMode) {
                     const shiftDoc = await getDoc(doc(db, "shifts", id));
                     if (shiftDoc.exists() && shiftDoc.data().userId === user.uid) {
                         const data = shiftDoc.data();
-                        const matchedEmp = emps.find(e => e.id === data.employerId);
-                        const matchedSite = sites.find(s => s.id === data.siteId);
+                        const matchedEmp = employers.find(employer => employer.id === data.employerId);
+                        const matchedSite = sites.find(site => site.id === data.siteId);
 
                         let formattedTime = data.startTime || '';
                         if (formattedTime && formattedTime.length === 4) {
@@ -101,7 +102,6 @@ export default function WriteShift() {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [user, id, isEditMode, navigate]);
 
-    // 2. Real-time End Time Update
     useEffect(() => {
         if (formData.date && formData.startTime && formData.hours) {
             const calculated = calculateEndTime(formData.date, formData.startTime, formData.hours);
@@ -124,69 +124,19 @@ export default function WriteShift() {
         if (isSaving) return;
         setIsSaving(true);
 
-        try {
-            // Employer Logic
-            let employerId;
-            const existingEmp = dbEmployers.find(item => item.name.toLowerCase().trim() === formData.employer.toLowerCase().trim());
-            if (existingEmp) {
-                employerId = existingEmp.id;
-            } else {
-                const newEmpRef = await addDoc(collection(db, "employers"), {
-                    name: formData.employer.trim(),
-                    defaultRate: formData.hourlyRate,
-                    userId: user.uid,
-                    createdAt: serverTimestamp()
-                });
-                employerId = newEmpRef.id;
-            }
+        // Dispatch the thunk
+        const resultAction = dispatch(saveShift({
+            formData: { ...formData, endTime: endTimeDisplay },
+            user,
+            employers,
+            sites,
+            isEditMode,
+            shiftId: id
+        }));
 
-            // Site Logic
-            let siteId;
-            const existingSite = dbSites.find(item => item.siteName.toLowerCase().trim() === formData.siteName.toLowerCase().trim());
-            if (existingSite) {
-                siteId = existingSite.id;
-            } else {
-                const newSiteRef = await addDoc(collection(db, "sites"), {
-                    siteName: formData.siteName.trim(),
-                    postalCode: formData.postalCode.toUpperCase().trim(),
-                    userId: user.uid,
-                    createdAt: serverTimestamp()
-                });
-                siteId = newSiteRef.id;
-            }
+        setIsSaving(false);
 
-            const rate = parseFloat(formData.hourlyRate) || 0;
-            const hrs = parseFloat(formData.hours) || 0;
-
-            const shiftPayload = {
-                date: formData.date,
-                startTime: formData.startTime,
-                endTime: endTimeDisplay,
-                hours: hrs,
-                hourlyRate: rate,
-                totalEarnings: rate * hrs,
-                employerId,
-                siteId,
-                userId: user.uid,
-                updatedAt: serverTimestamp(),
-                status: formData.status // Saves the selected status
-            };
-
-            if (isEditMode) {
-                await updateDoc(doc(db, "shifts", id), shiftPayload);
-            } else {
-                await addDoc(collection(db, "shifts"), {
-                    ...shiftPayload,
-                    createdAt: serverTimestamp()
-                });
-            }
-
-            navigate('/history');
-        } catch (error) {
-            alert("Error saving shift.");
-        } finally {
-            setIsSaving(false);
-        }
+        navigate('/history');
     };
 
     if (isLoading) {
@@ -255,7 +205,7 @@ export default function WriteShift() {
                         />
                         {showEmployerSuggestions && formData.employer && (
                             <div className="absolute z-30 w-full bg-white border rounded-xl shadow-2xl mt-1 max-h-48 overflow-y-auto">
-                                {dbEmployers.filter(emp => emp.name.toLowerCase().includes(formData.employer.toLowerCase())).map(emp => (
+                                {employers.filter(emp => emp.name.toLowerCase().includes(formData.employer.toLowerCase())).map(emp => (
                                     <div key={emp.id} className="p-3 hover:bg-indigo-50 cursor-pointer text-sm border-b last:border-0"
                                         onClick={() => handleSelectEmployer(emp)}>
                                         <p className="font-bold">{emp.name}</p>
@@ -281,7 +231,7 @@ export default function WriteShift() {
                     />
                     {showSiteSuggestions && formData.siteName && (
                         <div className="absolute z-30 w-full bg-white border rounded-xl shadow-2xl mt-1 max-h-48 overflow-y-auto">
-                            {dbSites.filter(s => s.siteName.toLowerCase().includes(formData.siteName.toLowerCase())).map(site => (
+                            {sites.filter(s => s.siteName.toLowerCase().includes(formData.siteName.toLowerCase())).map(site => (
                                 <div key={site.id} className="p-3 hover:bg-indigo-50 cursor-pointer border-b last:border-0"
                                     onClick={() => handleSelectSite(site)}>
                                     <p className="text-sm font-bold">{site.siteName}</p>

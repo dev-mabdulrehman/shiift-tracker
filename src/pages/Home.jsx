@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { db } from '../firebase';
-import { collection, query, where, onSnapshot, orderBy, limit, getDocs } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext';
+import { Calendar, Clock, MapPin, PoundSterling } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
 import ActiveShiftCard from '../components/ActiveShiftCard';
-import { Calendar, Clock, PoundSterling, MapPin } from 'lucide-react';
-import EarningsChart from '../components/EarningCharts';
+import StatCard from '../components/StatCard';
+import { useAuth } from '../context/AuthContext';
 
 export default function Home() {
   const [chartView, setChartView] = useState('month');
@@ -17,62 +16,36 @@ export default function Home() {
   const [totalMonthlyShifts, setTotalMonthlyShifts] = useState(0);
   const [siteMap, setSiteMap] = useState({});
 
+  const { data: shifts, status: shiftStatus, error: shiftError } = useSelector((state) => state.shifts);
+  const { data: sites, status: siteStatus, error: siteError } = useSelector((state) => state.sites);
+  const { data: employers, status: employersStatus, error: employersError } = useSelector((state) => state.employers);
+
+  useEffect(() => {
+    const sitesMap = {};
+    sites.forEach(site => sitesMap[site.id] = site.siteName);
+    console.log(sitesMap);
+    setSiteMap(sitesMap);
+  }, [sites]);
+
+
   useEffect(() => {
     if (!user) return;
-
-    // Fetch site names for mapping
-    const fetchSites = async () => {
-      const siteSnap = await getDocs(query(collection(db, "sites"), where("userId", "==", user.uid)));
-      const sites = {};
-      siteSnap.docs.forEach(doc => sites[doc.id] = doc.data().siteName);
-      setSiteMap(sites);
-    };
-    fetchSites();
-
-    // --- CHART & STATS LOGIC (Last 6 Months including Today) ---
     const now = new Date();
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString().split('T')[0];
+    const currentMonthStr = now.toISOString().substring(0, 7);
+    const thisMonthDocs = shifts.filter(shift => shift.date.startsWith(currentMonthStr));
 
-    const allShiftsQuery = query(
-      collection(db, "shifts"),
-      where("userId", "==", user.uid),
-      where("date", ">=", sixMonthsAgo),
-      orderBy("date", "desc")
-    );
+    const earnings = thisMonthDocs.reduce((acc, curr) => acc + (parseFloat(curr.totalEarnings) || 0), 0);
+    const hours = thisMonthDocs.reduce((acc, curr) => acc + (parseFloat(curr.hours) || 0), 0);
 
-    const unsubscribeAll = onSnapshot(allShiftsQuery, (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAllShifts(docs);
-
-      // Current Month Stats
-      const currentMonthStr = now.toISOString().substring(0, 7);
-      const thisMonthDocs = docs.filter(s => s.date.startsWith(currentMonthStr));
-
-      const earnings = thisMonthDocs.reduce((acc, curr) => acc + (parseFloat(curr.totalEarnings) || 0), 0);
-      const hours = thisMonthDocs.reduce((acc, curr) => acc + (parseFloat(curr.hours) || 0), 0);
-
-      setStats({ totalEarnings: earnings, totalHours: hours });
-      setTotalMonthlyShifts(thisMonthDocs.length);
-    });
+    setStats({ totalEarnings: earnings, totalHours: hours });
+    setTotalMonthlyShifts(thisMonthDocs.length);
+    // });
 
     const todayStr = now.toISOString().split('T')[0]; // Result: "YYYY-MM-DD"
+    const todayDocs = shifts.filter(shift => shift.date == todayStr);
 
-    // --- RECENT LIST LOGIC ---
-    const todayQuery = query(
-      collection(db, "shifts"),
-      where("userId", "==", user.uid),
-      where("date", "==", todayStr)
-    );
-
-    const unsubscribeToday = onSnapshot(todayQuery, (snapshot) => {
-      setActiveShifts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-
-    return () => {
-      unsubscribeAll();
-      unsubscribeToday();
-    };
-  }, [user]);
+    setActiveShifts(todayDocs)
+  }, [shifts]);
 
   /**
    * ACTIVE SHIFT LOGIC
@@ -82,8 +55,8 @@ export default function Home() {
     const todayStr = new Date().toISOString().split('T')[0];
 
     // Check allShifts for a match on today's date
-    return allShifts.find(s => s.date === todayStr && s.status !== 'completed');
-  }, [allShifts]);
+    return shifts.find(shift => shift.date === todayStr && shift.status !== 'completed');
+  }, [shifts]);
 
   /**
    * CLOCK OUT PERMISSION LOGIC
@@ -159,46 +132,6 @@ export default function Home() {
           )}
         </div>
       </section>
-
-
-      {/* Chart */}
-      <div className="bg-white p-6 rounded-4xl border border-gray-100 shadow-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-bold text-gray-800 text-lg">Earnings Trend</h3>
-          <div className="flex bg-gray-50 p-1 rounded-xl">
-            {['week', 'month', 'year'].map((v) => (
-              <button
-                key={v}
-                onClick={() => setChartView(v)}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${chartView === v ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400'
-                  }`}
-              >
-                {v.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
-        <EarningsChart shifts={allShifts} view={chartView} />
-      </div>
-
-    </div>
-  );
-}
-
-// Sub-component for cleaner code
-function StatCard({ icon, label, value, color }) {
-  const colors = {
-    green: 'bg-green-50 text-green-600',
-    blue: 'bg-blue-50 text-blue-600',
-    purple: 'bg-purple-50 text-purple-600'
-  };
-  return (
-    <div className="bg-white p-6 rounded-4xl shadow-sm border border-gray-100 flex items-center gap-4">
-      <div className={`p-3 rounded-2xl ${colors[color]}`}>{icon}</div>
-      <div>
-        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">{label} (Month)</p>
-        <p className="text-xl font-black text-gray-800">{value}</p>
-      </div>
     </div>
   );
 }

@@ -1,19 +1,29 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { db } from '../firebase';
 import {
-    collection, query, where, orderBy, onSnapshot, doc,
-    deleteDoc, updateDoc, getDocs, writeBatch, serverTimestamp
+    collection, doc,
+    serverTimestamp,
+    setDoc,
+    writeBatch
 } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext';
 import {
-    MapPin, Building2, Trash2, Search, Download, Upload,
-    Loader2, AlertCircle, Clock, Hash, TrendingUp, Edit3, X,
-    Settings2, Check, User
+    AlertCircle,
+    Building2,
+    Check,
+    Copy,
+    Download,
+    Edit3,
+    Loader2,
+    Trash2,
+    X
 } from 'lucide-react';
 import Papa from 'papaparse';
-import StatsOverview from '../components/StatsOverview';
-import HistoryFilters from '../components/HistoryFilters';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
+import HistoryFilters from '../components/HistoryFilters';
+import StatsOverview from '../components/StatsOverview';
+import { useAuth } from '../context/AuthContext';
+import { db } from '../firebase';
+import { deleteShift, subscribeToShifts } from '../store/features/shiftSlice';
 
 // Configuration for Export
 const EXPORTABLE_COLUMNS = [
@@ -28,8 +38,13 @@ const EXPORTABLE_COLUMNS = [
     { id: 'status', label: 'Shift Status', defaultHeader: 'Status' },
 ];
 
+let unsubscribe;
+
 export default function History() {
     const { user } = useAuth();
+    const { data: shifts, status: shiftStatus, error: shiftError } = useSelector((state) => state.shifts);
+    const { data: sites, status: siteStatus, error: siteError } = useSelector((state) => state.sites);
+    const { data: employers, status: employersStatus, error: employersError } = useSelector((state) => state.employers);
     const fileInputRef = useRef();
 
     // 1. STATES
@@ -37,12 +52,14 @@ export default function History() {
     const [statusFilter, setStatusFilter] = useState('all');
     const [searchEmployer, setSearchEmployer] = useState('');
     const [searchSite, setSearchSite] = useState('');
-    const [shifts, setShifts] = useState([]);
     const [employersMap, setEmployersMap] = useState({});
     const [sitesMap, setSitesMap] = useState({});
-    const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [selectedShiftIds, setSelectedShiftIds] = useState([]);
+
+    const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
+    const [shiftToClone, setShiftToClone] = useState(null);
+    const [newCloneDate, setNewCloneDate] = useState(new Date().toISOString().split('T')[0]);
 
     // Export Modal States
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -54,39 +71,59 @@ export default function History() {
     // 2. DATA FETCHING
     const fetchMetadata = async () => {
         if (!user) return { emps: [], sites: [] };
-        const [empSnap, siteSnap] = await Promise.all([
-            getDocs(query(collection(db, "employers"), where("userId", "==", user.uid))),
-            getDocs(query(collection(db, "sites"), where("userId", "==", user.uid)))
-        ]);
-        const emps = {}; empSnap.docs.forEach(doc => emps[doc.id] = doc.data().name);
-        const sites = {}; siteSnap.docs.forEach(doc => sites[doc.id] = doc.data());
-        setEmployersMap(emps);
-        setSitesMap(sites);
+        const employersTemp = {};
+        employers.forEach(employer => employersTemp[employer.id] = employer.name);
+        const sitesTemp = {}; sites.forEach(site => sitesTemp[site.id] = site);
+        setEmployersMap(employersTemp);
+        setSitesMap(sitesTemp);
         return {
-            emps: empSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-            sites: siteSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+            emps: employers,
+            sites
         };
     };
 
-    useEffect(() => { fetchMetadata(); }, [user]);
+    const handleCloneShift = async () => {
+        if (!shiftToClone || !newCloneDate) return;
+        setActionLoading(true);
+
+        try {
+            const { id, createdAt, updatedAt, ...restOfShift } = shiftToClone; // Remove ID and old timestamp
+
+            const clonedData = {
+                ...restOfShift,
+                date: newCloneDate,
+                status: 'pending',
+                createdAt: serverTimestamp()
+            };
+
+            const newShiftRef = doc(collection(db, "shifts"));
+            await setDoc(newShiftRef, clonedData);
+
+            alert("Shift cloned successfully!");
+            setIsCloneModalOpen(false);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to clone shift.");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const dispatch = useDispatch();
+
+    useEffect(() => { fetchMetadata(); }, [user, sites, employers]);
 
     useEffect(() => {
         if (!user) return;
-        setLoading(true);
-        const start = `${selectedMonth}-01`;
-        const end = `${selectedMonth}-31`;
-        const q = query(
-            collection(db, "shifts"),
-            where("userId", "==", user.uid),
-            where("date", ">=", start),
-            where("date", "<=", end),
-            orderBy("date", "desc")
-        );
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setShifts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setLoading(false);
-        });
-        return () => unsubscribe();
+
+        if (unsubscribe) unsubscribe();
+        dispatch(subscribeToShifts({ selectedMonth, uid: user.uid }))
+            .then(result => {
+                unsubscribe = result.payload;
+            });
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
     }, [user, selectedMonth]);
 
     // 3. FILTERING & STATS
@@ -136,7 +173,7 @@ export default function History() {
     };
 
     const handleDelete = async (id) => {
-        if (window.confirm("Are you sure?")) await deleteDoc(doc(db, "shifts", id));
+        if (window.confirm("Are you sure?")) dispatch(deleteShift(id));
     };
 
     // 5. EXPORT LOGIC
@@ -183,15 +220,20 @@ export default function History() {
             complete: async (results) => {
                 try {
                     const { emps, sites } = await fetchMetadata();
+                    console.log({ emps, sites })
                     const batch = writeBatch(db);
                     const todayISO = new Date().toISOString().split('T')[0];
 
                     for (const row of results.data) {
+                        console.log(row)
                         if (!row.Date || !row.Employer) continue;
 
+                        let isoDate = row.Date;
                         // Basic Date Normalization
-                        const [m, d, y] = row.Date.split('/');
-                        const isoDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+                        if (row.Date.includes('/')) {
+                            const [m, d, y] = row.Date.split('/');
+                            isoDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+                        }
 
                         // Resolve IDs (Simplified for brevity, similar to your original logic)
                         const empId = emps.find(e => e.name === row.Employer.trim())?.id || doc(collection(db, "employers")).id;
@@ -201,7 +243,7 @@ export default function History() {
                         batch.set(newShiftRef, {
                             userId: user.uid,
                             date: isoDate,
-                            hours: parseFloat(row['Hours in Decimal']) || 0,
+                            hours: parseFloat(row['Hours']) || 0,
                             totalEarnings: parseFloat(row['Total']?.replace(/[£,]/g, '')) || 0,
                             status: isoDate === todayISO ? 'on site' : 'completed',
                             employerId: empId,
@@ -209,9 +251,14 @@ export default function History() {
                             createdAt: serverTimestamp()
                         });
                     }
+                    console.log(batch)
                     await batch.commit();
+                    console.log(batch)
                     alert("Import successful!");
-                } catch (err) { alert("Import failed."); }
+                } catch (err) {
+                    console.log(err);
+                    alert("Import failed.");
+                }
                 finally { setActionLoading(false); }
             }
         });
@@ -235,13 +282,13 @@ export default function History() {
                     <p className="text-gray-500 font-medium">Manage and review your work records</p>
                 </div>
                 <div className="flex gap-3 w-full md:w-auto">
-                    <button onClick={() => setIsExportModalOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition shadow-sm">
+                    {/* <button onClick={() => setIsExportModalOpen(true)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-2xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition shadow-sm">
                         <Settings2 size={18} /> Export
                     </button>
                     <button onClick={() => fileInputRef.current.click()} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 rounded-2xl text-sm font-bold text-white hover:bg-indigo-700 transition shadow-md">
                         <Upload size={18} /> Import
-                    </button>
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleImport} />
+                    </button> */}
+                    {/* <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleImport} /> */}
                 </div>
             </div>
 
@@ -324,6 +371,17 @@ export default function History() {
                                         <button onClick={() => handleDelete(shift.id)} className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition">
                                             <Trash2 size={18} />
                                         </button>
+                                        <button
+                                            onClick={() => {
+                                                setShiftToClone(shift);
+                                                setNewCloneDate(shift.date); // Default to current shift date
+                                                setIsCloneModalOpen(true);
+                                            }}
+                                            className="p-2 text-amber-600 hover:bg-amber-50 rounded-xl transition"
+                                            title="Clone Shift"
+                                        >
+                                            <Copy size={18} />
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -364,7 +422,7 @@ export default function History() {
                     ))}
                 </div>
 
-                {filteredShifts.length === 0 && !loading && (
+                {filteredShifts.length === 0 && !shiftStatus == "loading" && (
                     <div className="p-20 text-center text-gray-400 flex flex-col items-center gap-4">
                         <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center">
                             <AlertCircle size={32} className="text-gray-200" />
@@ -428,6 +486,50 @@ export default function History() {
                                 className="px-8 py-5 bg-white border border-gray-200 text-gray-500 rounded-[2rem] font-bold hover:bg-gray-100 transition">
                                 Cancel
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* CLONE SHIFT MODAL */}
+            {isCloneModalOpen && (
+                <div className="fixed inset-0 z-110 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md">
+                    <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 animate-in zoom-in-95 duration-200">
+                        <div className="text-center space-y-2 mb-6">
+                            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+                                <Copy size={28} />
+                            </div>
+                            <h2 className="text-xl font-black text-gray-900">Clone Shift</h2>
+                            <p className="text-sm text-gray-500">Select a new date for this shift copy.</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-gray-400 ml-2">New Work Date</label>
+                                <input
+                                    type="date"
+                                    className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-amber-500 font-bold"
+                                    value={newCloneDate}
+                                    onChange={(e) => setNewCloneDate(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-2 pt-2">
+                                <button
+                                    onClick={handleCloneShift}
+                                    disabled={actionLoading}
+                                    className="w-full py-4 bg-amber-500 text-white rounded-2xl font-black hover:bg-amber-600 transition shadow-lg shadow-amber-100 flex items-center justify-center gap-2"
+                                >
+                                    {actionLoading ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+                                    Confirm Clone
+                                </button>
+                                <button
+                                    onClick={() => setIsCloneModalOpen(false)}
+                                    className="w-full py-4 text-gray-400 font-bold hover:text-gray-600 transition"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
