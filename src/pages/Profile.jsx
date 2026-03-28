@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import { updateEmail, updateProfile } from 'firebase/auth';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import {
+    Briefcase,
+    Edit2,
+    Loader2,
+    LogOut,
+    Save,
+    TrendingUp,
+    User,
+    X
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { updateProfile, updateEmail } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
-import {
-    User, LogOut, Briefcase,
-    TrendingUp, Edit2, Save, X, Loader2
-} from 'lucide-react';
 
 export default function Profile() {
     const { user, logout } = useAuth();
@@ -92,7 +98,7 @@ export default function Profile() {
     };
 
     return (
-        <div className="max-w-md mx-auto space-y-6 pb-10">
+        <div className="mx-auto space-y-6">
             {/* Notifications */}
             <div className="fixed top-4 left-1/2 -translate-x-1/2 w-full max-w-xs z-50 space-y-2">
                 {error && (

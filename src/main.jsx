@@ -1,22 +1,26 @@
-import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom'
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import "./assets/css/index.css";
 
 // Layouts & Context
-import Root from './layout/Root.jsx'
-import { AuthProvider } from './context/AuthContext.jsx'
+import { AuthProvider } from './context/AuthContext.jsx';
+import Root from './layout/Root.jsx';
 
 // Pages
-import Home from './pages/Home.jsx'
-import WriteShift from './pages/WriteShift.jsx'
-import History from './pages/History.jsx'
-import Login from './pages/Login.jsx'
-import Register from './pages/Register.jsx'
-import ForgotPassword from './pages/ForgotPassword.jsx'
-import Profile from './pages/Profile.jsx';
 import { Provider } from 'react-redux';
-import { store } from './store/store.js';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import Employers from './pages/Employers.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import Home from './pages/Home.jsx';
+import Login from './pages/Login.jsx';
+import Profile from './pages/Profile.jsx';
+import Register from './pages/Register.jsx';
+import Shifts from './pages/Shifts.jsx';
+import Sites from './pages/Sites.jsx';
+import WriteEmployer from './pages/WriteEmployer.jsx';
+import WriteShift from './pages/WriteShift.jsx';
+import WriteSite from './pages/WriteSite.jsx';
+import { store } from './store/store.js';
 
 
 createRoot(document.getElementById('root')).render(
@@ -32,9 +36,21 @@ createRoot(document.getElementById('root')).render(
           {/* Private App Routes */}
           <Route element={<ProtectedRoute><Root /></ProtectedRoute>}>
             <Route path='/' element={<Home />} />
-            <Route path='/shift/add' element={<WriteShift />} />
-            <Route path='/shift/edit/:id' element={<WriteShift />} />
-            <Route path='/history' element={<History />} />
+            {/* Shifts */}
+            <Route path='/shifts/add' element={<WriteShift />} />
+            <Route path='/shifts/edit/:id' element={<WriteShift />} />
+            <Route path='/shifts' element={<Shifts />} />
+
+            {/* Employers */}
+            <Route path='/employers/add' element={<WriteEmployer />} />
+            <Route path='/employers/edit/:id' element={<WriteEmployer />} />
+            <Route path='/employers' element={<Employers />} />
+
+            {/* Employers */}
+            <Route path='/sites/add' element={<WriteSite />} />
+            <Route path='/sites/edit/:id' element={<WriteSite />} />
+            <Route path='/sites' element={<Sites />} />
+
             <Route path='/profile' element={<Profile />} />
           </Route>
 

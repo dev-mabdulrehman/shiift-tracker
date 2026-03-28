@@ -1,11 +1,11 @@
-import React, { useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
-import Navbar from '../components/Navbar'
-import { useAuth } from '../context/AuthContext'
+import { useEffect } from 'react';
 import { useDispatch } from 'react-redux';
+import { Outlet } from 'react-router-dom';
+import Sidebar from '../components/Sidebar/Sidebar';
+import { useAuth } from '../context/AuthContext';
+import { subscribeToEmployers } from '../store/features/employersSlice';
 import { subscribeToShifts } from '../store/features/shiftSlice';
 import { subscribeToSites } from '../store/features/sitesSlice';
-import { subscribeToEmployers } from '../store/features/employersSlice';
 
 export default function Root() {
     const { user } = useAuth();
@@ -39,12 +39,20 @@ export default function Root() {
         };
     }, [user]);
 
+    // return (
+    //     <div className="min-h-screen bg-gray-50">
+    //         <Navbar />
+    //         <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    //             <Outlet />
+    //         </main>
+    //     </div>
+    // )
     return (
-        <div className="min-h-screen bg-gray-50">
-            <Navbar />
-            <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <div className="flex min-h-screen bg-gray-50/50">
+            <Sidebar />
+            <main className="flex-1 overflow-x-hidden p-4">
                 <Outlet />
             </main>
         </div>
-    )
+    );
 }

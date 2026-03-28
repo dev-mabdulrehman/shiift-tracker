@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
+import { History, LayoutDashboard, LogOut, Menu, PlusCircle, User, X } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, PlusCircle, History, LogOut, Menu, X, User } from 'lucide-react';
+import { auth } from '../firebase';
 
 export default function Navbar() {
     const { user } = useAuth();
@@ -22,8 +22,8 @@ export default function Navbar() {
 
     const navLinks = [
         { name: 'Dashboard', path: '/', icon: <LayoutDashboard size={20} /> },
-        { name: 'Add Shift', path: '/shift/add', icon: <PlusCircle size={20} /> },
-        { name: 'History', path: '/history', icon: <History size={20} /> },
+        { name: 'Add Shift', path: '/shifts/add', icon: <PlusCircle size={20} /> },
+        { name: 'History', path: '/shifts', icon: <History size={20} /> },
         { name: 'Profile', path: '/profile', icon: <User size={20} /> },
     ];
 

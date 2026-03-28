@@ -40,7 +40,7 @@ const EXPORTABLE_COLUMNS = [
 
 let unsubscribe;
 
-export default function History() {
+export default function Shifts() {
     const { user } = useAuth();
     const { data: shifts, status: shiftStatus, error: shiftError } = useSelector((state) => state.shifts);
     const { data: sites, status: siteStatus, error: siteError } = useSelector((state) => state.sites);

@@ -2,7 +2,6 @@ import {
     doc, getDoc
 } from 'firebase/firestore';
 import {
-    ArrowLeft,
     Building2,
     Calendar,
     CheckCircle2,
@@ -12,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
 import { saveShift } from '../store/features/shiftSlice';
@@ -149,170 +148,165 @@ export default function WriteShift() {
     }
 
     return (
-        <div className="mx-auto max-w-2xl pb-10">
-            <form onSubmit={handleSubmit} className="bg-white p-8 rounded-3xl shadow-xl space-y-6 border border-gray-100">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-gray-800">
-                        {isEditMode ? 'Edit Shift' : 'Add New Shift'}
-                    </h2>
-                    <Link to="/history" className="text-gray-400 hover:text-gray-600 transition">
-                        <ArrowLeft size={20} />
-                    </Link>
+        <form onSubmit={handleSubmit} className="bg-white p-8 rounded-3xl shadow-xl space-y-6 border border-gray-100">
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-800">
+                    {isEditMode ? 'Edit Shift' : 'Add New Shift'}
+                </h2>
+            </div>
+
+            {/* Status Dropdown - ONLY SHOWS ON EDIT */}
+            {isEditMode && (
+                <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                    <label className="text-xs font-bold text-indigo-600 uppercase mb-2 flex items-center gap-2">
+                        <CheckCircle2 size={14} /> Update Status
+                    </label>
+                    <select
+                        value={formData.status}
+                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                        className="w-full p-3 bg-white border border-indigo-200 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                    >
+                        <option value="pending">⏳ Pending</option>
+                        <option value="on site">📍 On Site</option>
+                        <option value="completed">✅ Completed</option>
+                    </select>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Date */}
+                <div>
+                    <label className="text-sm font-semibold text-gray-600 mb-1 flex items-center gap-1"><Calendar size={14} /> Date</label>
+                    <input
+                        type="date"
+                        required
+                        value={formData.date}
+                        className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500"
+                        onChange={e => setFormData({ ...formData, date: e.target.value })}
+                    />
                 </div>
 
-                {/* Status Dropdown - ONLY SHOWS ON EDIT */}
-                {isEditMode && (
-                    <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
-                        <label className="text-xs font-bold text-indigo-600 uppercase mb-2 flex items-center gap-2">
-                            <CheckCircle2 size={14} /> Update Status
-                        </label>
-                        <select
-                            value={formData.status}
-                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                            className="w-full p-3 bg-white border border-indigo-200 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                        >
-                            <option value="pending">⏳ Pending</option>
-                            <option value="on site">📍 On Site</option>
-                            <option value="completed">✅ Completed</option>
-                        </select>
-                    </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Date */}
-                    <div>
-                        <label className="text-sm font-semibold text-gray-600 mb-1 flex items-center gap-1"><Calendar size={14} /> Date</label>
-                        <input
-                            type="date"
-                            required
-                            value={formData.date}
-                            className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500"
-                            onChange={e => setFormData({ ...formData, date: e.target.value })}
-                        />
-                    </div>
-
-                    {/* Employer */}
-                    <div className="relative" ref={empRef}>
-                        <label className="text-sm font-semibold text-gray-600 mb-1 flex items-center gap-1"><Building2 size={14} /> Employer</label>
-                        <input
-                            type="text"
-                            value={formData.employer}
-                            required
-                            autoComplete="off"
-                            placeholder="Company Name"
-                            className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500"
-                            onChange={e => { setFormData({ ...formData, employer: e.target.value }); setShowEmployerSuggestions(true); }}
-                        />
-                        {showEmployerSuggestions && formData.employer && (
-                            <div className="absolute z-30 w-full bg-white border rounded-xl shadow-2xl mt-1 max-h-48 overflow-y-auto">
-                                {employers.filter(emp => emp.name.toLowerCase().includes(formData.employer.toLowerCase())).map(emp => (
-                                    <div key={emp.id} className="p-3 hover:bg-indigo-50 cursor-pointer text-sm border-b last:border-0"
-                                        onClick={() => handleSelectEmployer(emp)}>
-                                        <p className="font-bold">{emp.name}</p>
-                                        <p className="text-xs text-gray-400">Usual Rate: £{emp.defaultRate}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Site Name */}
-                <div className="relative" ref={siteRef}>
-                    <label className="text-sm font-semibold text-gray-600 mb-1 flex items-center gap-1"><MapPin size={14} /> Site Name</label>
+                {/* Employer */}
+                <div className="relative" ref={empRef}>
+                    <label className="text-sm font-semibold text-gray-600 mb-1 flex items-center gap-1"><Building2 size={14} /> Employer</label>
                     <input
                         type="text"
-                        value={formData.siteName}
+                        value={formData.employer}
                         required
                         autoComplete="off"
-                        placeholder="e.g. Tata Steel"
+                        placeholder="Company Name"
                         className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500"
-                        onChange={e => { setFormData({ ...formData, siteName: e.target.value }); setShowSiteSuggestions(true); }}
+                        onChange={e => { setFormData({ ...formData, employer: e.target.value }); setShowEmployerSuggestions(true); }}
                     />
-                    {showSiteSuggestions && formData.siteName && (
+                    {showEmployerSuggestions && formData.employer && (
                         <div className="absolute z-30 w-full bg-white border rounded-xl shadow-2xl mt-1 max-h-48 overflow-y-auto">
-                            {sites.filter(s => s.siteName.toLowerCase().includes(formData.siteName.toLowerCase())).map(site => (
-                                <div key={site.id} className="p-3 hover:bg-indigo-50 cursor-pointer border-b last:border-0"
-                                    onClick={() => handleSelectSite(site)}>
-                                    <p className="text-sm font-bold">{site.siteName}</p>
-                                    <p className="text-xs text-gray-400">{site.postalCode}</p>
+                            {employers.filter(emp => emp.name.toLowerCase().includes(formData.employer.toLowerCase())).map(emp => (
+                                <div key={emp.id} className="p-3 hover:bg-indigo-50 cursor-pointer text-sm border-b last:border-0"
+                                    onClick={() => handleSelectEmployer(emp)}>
+                                    <p className="font-bold">{emp.name}</p>
+                                    <p className="text-xs text-gray-400">Usual Rate: £{emp.defaultRate}</p>
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
+            </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                        <label className="text-sm font-semibold text-gray-600 mb-1 text-center block">Postcode</label>
-                        <input
-                            type="text"
-                            value={formData.postalCode}
-                            required
-                            className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500 text-center"
-                            onChange={e => setFormData({ ...formData, postalCode: e.target.value })}
-                        />
+            {/* Site Name */}
+            <div className="relative" ref={siteRef}>
+                <label className="text-sm font-semibold text-gray-600 mb-1 flex items-center gap-1"><MapPin size={14} /> Site Name</label>
+                <input
+                    type="text"
+                    value={formData.siteName}
+                    required
+                    autoComplete="off"
+                    placeholder="e.g. Tata Steel"
+                    className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={e => { setFormData({ ...formData, siteName: e.target.value }); setShowSiteSuggestions(true); }}
+                />
+                {showSiteSuggestions && formData.siteName && (
+                    <div className="absolute z-30 w-full bg-white border rounded-xl shadow-2xl mt-1 max-h-48 overflow-y-auto">
+                        {sites.filter(s => s.siteName.toLowerCase().includes(formData.siteName.toLowerCase())).map(site => (
+                            <div key={site.id} className="p-3 hover:bg-indigo-50 cursor-pointer border-b last:border-0"
+                                onClick={() => handleSelectSite(site)}>
+                                <p className="text-sm font-bold">{site.siteName}</p>
+                                <p className="text-xs text-gray-400">{site.postalCode}</p>
+                            </div>
+                        ))}
                     </div>
-                    <div>
-                        <label className="text-sm font-semibold text-gray-600 mb-1 text-center block">Start</label>
-                        <input
-                            type="time"
-                            required
-                            value={formData.startTime}
-                            className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500"
-                            onChange={e => setFormData({ ...formData, startTime: e.target.value })}
-                        />
-                    </div>
-                    <div>
-                        <label className="text-sm font-semibold text-gray-600 mb-1 text-center block">Hours</label>
-                        <input
-                            type="number"
-                            step="0.1"
-                            required
-                            value={formData.hours}
-                            placeholder="12"
-                            className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500 text-center"
-                            onChange={e => setFormData({ ...formData, hours: e.target.value })}
-                        />
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-bold text-gray-400 mb-1 block text-center uppercase">Est. End</label>
-                        <div className="p-3 bg-indigo-50 rounded-xl text-center font-bold text-indigo-700 h-12.5 flex items-center justify-center border border-indigo-100">
-                            {endTimeDisplay}
-                        </div>
-                    </div>
-                </div>
+                )}
+            </div>
 
-                <div className="md:w-1/2">
-                    <label className="text-sm font-semibold text-gray-600 mb-1 flex items-center gap-1"><PoundSterling size={14} /> Hourly Rate (£)</label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <label className="text-sm font-semibold text-gray-600 mb-1 text-center block">Postcode</label>
                     <input
-                        type="number"
-                        step="0.01"
-                        value={formData.hourlyRate}
+                        type="text"
+                        value={formData.postalCode}
                         required
-                        className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500"
-                        onChange={e => setFormData({ ...formData, hourlyRate: e.target.value })}
+                        className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500 text-center"
+                        onChange={e => setFormData({ ...formData, postalCode: e.target.value })}
                     />
                 </div>
-
-                <div className="flex gap-3 pt-4">
-                    <button
-                        type="button"
-                        onClick={() => navigate('/history')}
-                        className="flex-1 py-4 rounded-2xl font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 transition-all"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={isSaving}
-                        className={`flex-2 py-4 rounded-2xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${isSaving ? 'bg-gray-300' : 'bg-indigo-600 hover:bg-indigo-700 text-white active:scale-95'}`}
-                    >
-                        {isSaving && <Loader2 className="animate-spin" size={20} />}
-                        {isSaving ? 'Saving...' : isEditMode ? 'Update Record' : 'Save Record'}
-                    </button>
+                <div>
+                    <label className="text-sm font-semibold text-gray-600 mb-1 text-center block">Start</label>
+                    <input
+                        type="time"
+                        required
+                        value={formData.startTime}
+                        className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500"
+                        onChange={e => setFormData({ ...formData, startTime: e.target.value })}
+                    />
                 </div>
-            </form>
-        </div>
+                <div>
+                    <label className="text-sm font-semibold text-gray-600 mb-1 text-center block">Hours</label>
+                    <input
+                        type="number"
+                        step="0.1"
+                        required
+                        value={formData.hours}
+                        placeholder="12"
+                        className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500 text-center"
+                        onChange={e => setFormData({ ...formData, hours: e.target.value })}
+                    />
+                </div>
+                <div>
+                    <label className="text-[10px] font-bold text-gray-400 mb-1 block text-center uppercase">Est. End</label>
+                    <div className="p-3 bg-indigo-50 rounded-xl text-center font-bold text-indigo-700 h-12.5 flex items-center justify-center border border-indigo-100">
+                        {endTimeDisplay}
+                    </div>
+                </div>
+            </div>
+
+            <div className="md:w-1/2">
+                <label className="text-sm font-semibold text-gray-600 mb-1 flex items-center gap-1"><PoundSterling size={14} /> Hourly Rate (£)</label>
+                <input
+                    type="number"
+                    step="0.01"
+                    value={formData.hourlyRate}
+                    required
+                    className="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={e => setFormData({ ...formData, hourlyRate: e.target.value })}
+                />
+            </div>
+
+            <div className="flex gap-3 pt-4">
+                <button
+                    type="button"
+                    onClick={() => navigate('/history')}
+                    className="flex-1 py-4 rounded-2xl font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 transition-all"
+                >
+                    Cancel
+                </button>
+                <button
+                    type="submit"
+                    disabled={isSaving}
+                    className={`flex-2 py-4 rounded-2xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${isSaving ? 'bg-gray-300' : 'bg-indigo-600 hover:bg-indigo-700 text-white active:scale-95'}`}
+                >
+                    {isSaving && <Loader2 className="animate-spin" size={20} />}
+                    {isSaving ? 'Saving...' : isEditMode ? 'Update Record' : 'Save Record'}
+                </button>
+            </div>
+        </form>
     );
 }
